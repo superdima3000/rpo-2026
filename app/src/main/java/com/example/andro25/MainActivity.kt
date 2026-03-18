@@ -1,12 +1,24 @@
 package com.example.andro25
 
+import android.app.Activity
+import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.registerForActivityResult
 import com.example.andro25.databinding.ActivityMainBinding
+import com.example.andro25.nativelibs.NativeLib
+import com.example.andro25.nativelibs.NativeLib.decrypt
+import com.example.andro25.nativelibs.NativeLib.encrypt
+import com.example.andro25.nativelibs.NativeLib.initRng
+import com.example.andro25.nativelibs.NativeLib.randomBytes
 import com.example.andro25.util.checkDecoding
 import com.example.andro25.util.hexToString
 import com.example.andro25.util.stringToHex
@@ -14,11 +26,21 @@ import com.example.andro25.util.stringToHex
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var activityResultLauncher: ActivityResultLauncher<Intent>
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i(TAG, "Hello from Kotlin")
+
+        activityResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()
+        ) { result: ActivityResult ->
+            if (result.resultCode == RESULT_OK) {
+                val data = result.data
+                val pin = data?.getStringExtra("pin")
+                Toast.makeText(this, pin, Toast.LENGTH_SHORT).show()
+            }
+        }
 
         val init = initRng()
         Log.i(TAG, "Initialisation of RNG status code: $init")
@@ -38,28 +60,38 @@ class MainActivity : AppCompatActivity() {
 
 
 
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         // Example of a call to a native method
-        binding.sampleText.text = stringFromJNI()
+        //binding.sampleText.text = stringFromJNI()
     }
 
-    external fun stringFromJNI(): String
-    external fun initRng(): Int
-    external fun randomBytes(no: Int): ByteArray
-    external fun encrypt(key: ByteArray, data: ByteArray): ByteArray
+    fun onActivityResult(result: ActivityResult){
 
-    external fun decrypt(key: ByteArray, data: ByteArray): ByteArray
+    }
+
+
+
+    fun onButtonClick(v: View){
+//        val key = randomBytes(16)
+//        val data = stringToHex("010AFD00458395867BC3")
+//        val encrypted = encrypt(key, data)
+//        val decrypted = decrypt(key, encrypted)
+//        val s = hexToString(decrypted)
+//
+//        Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+
+        val it = Intent(this, PinpadActivity::class.java)
+        activityResultLauncher.launch(it)
+    }
+
 
 
     companion object {
         private const val TAG = "MainActivity"
-        init {
-            System.loadLibrary("mbedcrypto")
-            System.loadLibrary("andro25")
-            Log.i(TAG, "Libraries loaded successfully")
-        }
+
     }
 
 }

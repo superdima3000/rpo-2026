@@ -18,7 +18,7 @@ char *personalization = "andro25-sample-app";
 
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_andro25_MainActivity_stringFromJNI(
+Java_com_example_andro25_nativelibs_NativeLib_stringFromJNI(
         JNIEnv* env,
         jobject /* this */) {
     SLOG_PATTERN("%v");
@@ -29,7 +29,7 @@ Java_com_example_andro25_MainActivity_stringFromJNI(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_example_andro25_MainActivity_initRng(JNIEnv *env, jobject clazz) {
+Java_com_example_andro25_nativelibs_NativeLib_initRng(JNIEnv *env, jobject clazz) {
     mbedtls_entropy_init( &entropy );
     mbedtls_ctr_drbg_init( &ctr_drbg );
 
@@ -39,7 +39,7 @@ Java_com_example_andro25_MainActivity_initRng(JNIEnv *env, jobject clazz) {
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_MainActivity_randomBytes(JNIEnv *env, jobject jclass, jint no) {
+Java_com_example_andro25_nativelibs_NativeLib_randomBytes(JNIEnv *env, jobject jclass, jint no) {
     uint8_t* buf = new uint8_t [no];
     mbedtls_ctr_drbg_random(&ctr_drbg, buf, no);
     jbyteArray rnd = env->NewByteArray(no);
@@ -49,7 +49,7 @@ Java_com_example_andro25_MainActivity_randomBytes(JNIEnv *env, jobject jclass, j
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_MainActivity_encrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
+Java_com_example_andro25_nativelibs_NativeLib_encrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
 {
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
@@ -84,7 +84,7 @@ Java_com_example_andro25_MainActivity_encrypt(JNIEnv *env, jobject jclass, jbyte
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_MainActivity_decrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
+Java_com_example_andro25_nativelibs_NativeLib_decrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
 {
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
