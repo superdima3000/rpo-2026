@@ -6,7 +6,8 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
-import com.example.andro25.nativelibs.NativeLib.randomBytes
+import com.example.andro25.MainActivity.Companion.randomBytes
+import java.text.DecimalFormat
 import kotlin.experimental.and
 
 
@@ -18,6 +19,7 @@ class PinpadActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_pinpad)
+        processTextParameters()
 
         tvPin = findViewById<TextView>(R.id.txtPin)
 
@@ -68,6 +70,23 @@ class PinpadActivity : ComponentActivity() {
             keys[idx].text = keys[i].text
             keys[i].text = text
         }
+    }
+
+    private fun processTextParameters() {
+        val ta = findViewById<TextView>(R.id.txtAmount)
+        val amt = intent.getStringExtra("amount") ?: "0"
+        val f = amt.toLongOrNull() ?: 0L
+        val df = DecimalFormat("#,###,###,##0.00")
+        val s = df.format(f)
+        ta.text = "Сумма: $s"
+
+        val tp = findViewById<TextView>(R.id.txtPtc)
+        val pts = intent.getIntExtra("ptc", 0)
+        when(pts){
+            2 -> tp.text = "Осталось две попытки"
+            1 -> tp.text = "Осталась одна попытка"
+        }
+
     }
 
     companion object {

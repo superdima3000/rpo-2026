@@ -12,15 +12,52 @@
 #define SLOG_PATTERN(...) android_logger->set_pattern(__VA_ARGS__)
 
 auto android_logger = spdlog::android_logger_mt("android", "andro25_ndk");
+
+std::mutex pinMutex;
+std::condition_variable pinCv;
+std::string receivedPin;
+bool pinReady = false;
+
+
+
 mbedtls_entropy_context entropy;
 mbedtls_ctr_drbg_context ctr_drbg;
-char *personalization = "andro25-sample-app";
+const char *personalization = "andro25-sample-app";
+
+JavaVM* gJvm = nullptr;
+
+JNIEXPORT jint JNICALL JNI_OnLoad (JavaVM* pjvm, void* reserved)
+{
+    gJvm = pjvm;
+    return JNI_VERSION_1_6;
+}
+
+JNIEnv* getEnv (bool& detach)
+{
+    JNIEnv* env = nullptr;
+    int status = gJvm->GetEnv ((void**)&env, JNI_VERSION_1_6);
+    detach = false;
+    if (status == JNI_EDETACHED) {
+        if (gJvm->AttachCurrentThread(&env, nullptr) != 0)
+            return nullptr;
+        detach = true;
+    }
+    return env;
+}
+
+void releaseEnv (bool detach, JNIEnv* env)
+{
+    if (detach && (gJvm != nullptr))
+    {
+        gJvm->DetachCurrentThread ();
+    }
+}
 
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_example_andro25_nativelibs_NativeLib_stringFromJNI(
+Java_com_example_andro25_MainActivity_stringFromJNI(
         JNIEnv* env,
-        jobject /* this */) {
+        jclass /* this */) {
     SLOG_PATTERN("%v");
     LOG_INFO("Hello from c++ %d", 2026);
     SLOG_INFO("Hello from spdlog {0}", 2026);
@@ -29,7 +66,7 @@ Java_com_example_andro25_nativelibs_NativeLib_stringFromJNI(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_example_andro25_nativelibs_NativeLib_initRng(JNIEnv *env, jobject clazz) {
+Java_com_example_andro25_MainActivity_initRng(JNIEnv *env, jclass clazz) {
     mbedtls_entropy_init( &entropy );
     mbedtls_ctr_drbg_init( &ctr_drbg );
 
@@ -39,7 +76,7 @@ Java_com_example_andro25_nativelibs_NativeLib_initRng(JNIEnv *env, jobject clazz
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_nativelibs_NativeLib_randomBytes(JNIEnv *env, jobject jclass, jint no) {
+Java_com_example_andro25_MainActivity_randomBytes(JNIEnv *env, jclass jclass, jint no) {
     uint8_t* buf = new uint8_t [no];
     mbedtls_ctr_drbg_random(&ctr_drbg, buf, no);
     jbyteArray rnd = env->NewByteArray(no);
@@ -49,7 +86,7 @@ Java_com_example_andro25_nativelibs_NativeLib_randomBytes(JNIEnv *env, jobject j
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_nativelibs_NativeLib_encrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
+Java_com_example_andro25_MainActivity_encrypt(JNIEnv *env, jclass jclass, jbyteArray key, jbyteArray data)
 {
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
@@ -84,7 +121,7 @@ Java_com_example_andro25_nativelibs_NativeLib_encrypt(JNIEnv *env, jobject jclas
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_com_example_andro25_nativelibs_NativeLib_decrypt(JNIEnv *env, jobject jclass, jbyteArray key, jbyteArray data)
+Java_com_example_andro25_MainActivity_decrypt(JNIEnv *env, jclass jclass, jbyteArray key, jbyteArray data)
 {
     jsize ksz = env->GetArrayLength(key);
     jsize dsz = env->GetArrayLength(data);
@@ -127,4 +164,93 @@ Java_com_example_andro25_nativelibs_NativeLib_decrypt(JNIEnv *env, jobject jclas
     env->ReleaseByteArrayElements(key, pkey, 0);
     env->ReleaseByteArrayElements(data, pdata, 0);
     return dout;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_com_example_andro25_MainActivity_transaction(JNIEnv *xenv, jobject xthiz, jbyteArray xtrd) {
+    jobject thiz = xenv->NewGlobalRef(xthiz);
+    jbyteArray trd  = (jbyteArray)xenv->NewGlobalRef(xtrd);
+
+    std::thread ([thiz, trd]() {
+        bool detach = false;
+        JNIEnv *env = getEnv(detach);
+
+        jclass cls = env->GetObjectClass(thiz);
+
+        jmethodID enterPinId = env->GetMethodID(
+                cls, "enterPin", "(ILjava/lang/String;)V");
+
+        jmethodID resultId = env->GetMethodID(cls, "transactionResult", "(Z)V");
+
+        uint8_t *p = (uint8_t *) env->GetByteArrayElements(trd, 0);
+        jsize sz = env->GetArrayLength(trd);
+
+        if ((sz != 9) || (p[0] != 0x9F) || (p[1] != 0x02) || (p[2] != 0x06)){
+            env->CallVoidMethod(thiz, resultId, false);
+        } else {
+            char buf[13];
+
+            for (int i = 0; i < 6; i++) {
+                uint8_t n = *(p + 3 + i);
+                buf[i * 2] = ((n & 0xF0) >> 4) + '0';
+                buf[i * 2 + 1] = (n & 0x0F) + '0';
+            }
+
+            buf[12] = 0x00;
+
+            jstring jamount = (jstring) env->NewStringUTF(buf);
+            int ptc = 3;
+            bool ok = false;
+
+            while (ptc > 0) {
+
+                {
+                    std::lock_guard<std::mutex> lock(pinMutex);
+                    pinReady = false;
+                }
+
+                env->CallVoidMethod(thiz, enterPinId, ptc, jamount);
+
+                std::unique_lock<std::mutex> lock(pinMutex);
+                pinCv.wait(lock, [] { return pinReady; });
+
+                if (receivedPin == "1234") {
+                    ok = true;
+                    break;
+                }
+
+                ptc--;
+            }
+
+            env->CallVoidMethod(thiz, resultId, ok);
+        }
+
+        env->ReleaseByteArrayElements(trd, (jbyte *)p, JNI_ABORT);
+        env->DeleteLocalRef(cls);
+        env->DeleteGlobalRef(thiz);
+        env->DeleteGlobalRef(trd);
+        releaseEnv(detach, env);
+        SLOG_INFO("thread detached successfully");
+    }).detach();
+
+
+    return true;
+}
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_com_example_andro25_MainActivity_providePin(JNIEnv *env, jobject thiz, jstring jpin){
+    if (!jpin) return;
+    const char* utf = env->GetStringUTFChars(jpin, nullptr);
+    if (!utf) return;
+
+    {
+        std::lock_guard<std::mutex> lock(pinMutex);
+        receivedPin = utf;
+        pinReady = true;
+    }
+
+    env->ReleaseStringUTFChars(jpin, utf);
+    pinCv.notify_one();
 }
