@@ -11,7 +11,7 @@ find_library(log-lib log)
 #spdlog
 add_library(spdlog STATIC IMPORTED)
 set_target_properties(spdlog PROPERTIES IMPORTED_LOCATION
-    ${CMAKE_SOURCE_DIR}/../../../../../libs/spdlog/build/${ANDROID_ABI}/libspdlog.a)
+    ${CMAKE_SOURCE_DIR}/../../../../libs/spdlog/build/${ANDROID_ABI}/libspdlog.a)
 
 #mbedcrypto
 add_library(mbedcrypto SHARED IMPORTED)
@@ -19,8 +19,8 @@ set_target_properties(mbedcrypto PROPERTIES IMPORTED_LOCATION
     ${CMAKE_SOURCE_DIR}/../nativeLibs/${ANDROID_ABI}/libmbedcrypto.so)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PUBLIC
-    ${CMAKE_SOURCE_DIR}/../../../../../libs/spdlog/spdlog/include
-    ${CMAKE_SOURCE_DIR}/../../../../../libs/mbedtls/mbedtls/include)
+    ${CMAKE_SOURCE_DIR}/../../../../libs/spdlog/spdlog/include
+    ${CMAKE_SOURCE_DIR}/../../../../libs/mbedtls/mbedtls/include)
 
 
 
